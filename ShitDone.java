@@ -5,6 +5,9 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.Scanner;
 
+/**
+Class Shiet does contain some methods used to read a polish notation math expression from a given file, and then generate a number of threads to resolve the expresssion asap.
+*/
 public class Shiet {
 	private class Calcola extends Thread {
 		String operator;
