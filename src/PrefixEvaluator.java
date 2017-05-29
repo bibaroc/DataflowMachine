@@ -5,14 +5,18 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Scanner;
 
+/**
+ * Used to check for correctness.
+ *
+ */
 public class PrefixEvaluator {
 
 	public static void main(String[] args) throws FileNotFoundException {
-		//Non so perche' questo vuole i punti sui double.
+		// Non so perche' questo vuole i punti sui double.
 		long StartTime = System.currentTimeMillis();
 		ArrayList<String> arr = new ArrayList<String>();
 		Scanner sc = new Scanner(new File("expression.txt"));
-		while(sc.hasNext())
+		while (sc.hasNext())
 			arr.add(sc.next());
 		Deque<Double> stack = new ArrayDeque<>();
 		for (int i = arr.size() - 1; i > -1; i--) {
@@ -33,8 +37,8 @@ public class PrefixEvaluator {
 				stack.push(Double.parseDouble(s));
 
 		}
-		System.out.println("Result: "+stack.poll());
-		System.out.println("After: "+(System.currentTimeMillis()-StartTime));
+		System.out.println("Result: " + stack.poll());
+		System.out.println("After: " + (System.currentTimeMillis() - StartTime));
 	}
 
 }

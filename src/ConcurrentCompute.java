@@ -1,6 +1,13 @@
 import java.io.*;
 import java.util.*;
 
+/**
+ * Cuncurrently computes a huge ass polish notation expression. Do not use, u
+ * have been warned.
+ * 
+ * @author Vladyslav Sulimovsky
+ *
+ */
 public class ConcurrentCompute {
 
 	private static String buffer = "";
@@ -20,7 +27,7 @@ public class ConcurrentCompute {
 				buffer += bf;
 			// StringTokenizer is faster than Scanner.
 			st = new StringTokenizer(buffer);
-			//System.out.println(buffer);
+			// System.out.println(buffer);
 			// It's faster to skip conditioning and just throw an Exception if
 			// this fails.
 			try {
@@ -39,7 +46,7 @@ public class ConcurrentCompute {
 			catch (NoSuchElementException e) {
 				throw new NoSuchElementException("The file appears to be empty.");
 			}
-			//For now testing with just a thread.
+			// For now testing with just a thread.
 			Thread main = new Resolver();
 			main.start();
 			main.join();
@@ -59,6 +66,7 @@ public class ConcurrentCompute {
 
 	/**
 	 * Used to climb the tree bottom to top each time solving what possible.
+	 * 
 	 * @author Vladyslav Sulimovsky
 	 *
 	 */
@@ -98,13 +106,14 @@ public class ConcurrentCompute {
 				removeLast.result = removeLast.leftSon.result / removeLast.rightSon.result;
 				break;
 			}
-			//System.out.println(removeLast.result + " = " + removeLast.leftSon.result + " " + removeLast.operation + " "
-			//		+ removeLast.rightSon.result);
-			if (removeLast.father!=null&&removeLast.father.computable()) {
+			// System.out.println(removeLast.result + " = " +
+			// removeLast.leftSon.result + " " + removeLast.operation + " "
+			// + removeLast.rightSon.result);
+			if (removeLast.father != null && removeLast.father.computable()) {
 				ll.add(removeLast.father);
 				checkForSolvables();
 			} else
-			checkForSolvables();
+				checkForSolvables();
 
 		}
 	}
