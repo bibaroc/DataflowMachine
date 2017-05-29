@@ -11,7 +11,7 @@ public class PrefixEvaluator {
 		//Non so perche' questo vuole i punti sui double.
 		long StartTime = System.currentTimeMillis();
 		ArrayList<String> arr = new ArrayList<String>();
-		Scanner sc = new Scanner(new File("C:/Users/Bibaroc/Desktop/Workspace/DataFlowMachine/expression.txt"));
+		Scanner sc = new Scanner(new File("expression.txt"));
 		while(sc.hasNext())
 			arr.add(sc.next());
 		Deque<Double> stack = new ArrayDeque<>();
