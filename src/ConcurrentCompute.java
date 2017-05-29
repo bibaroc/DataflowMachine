@@ -1,125 +1,126 @@
 import java.io.*;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Scanner;
-import java.util.Vector;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.*;
 
 public class ConcurrentCompute {
+	private String buffer;
+	private long startTime;
+	private static StringTokenizer st = null;
+	private Tree root = null;
 
-	// Scanner to read from file.
-	private static Scanner SC = null;
-	// Left son's index: 2i+1
-	// Right son's index: 2i+2
-	// Father's index: floor((i-1)/2)
-	private static HashMap<Integer, Object> tree;
-	private static ConcurrentLinkedQueue<Integer> toResolve = null;
-
-	// The builder imports the file in memory all by itself.
-	ConcurrentCompute(String pathToExpression) {
-		try {
-			// Get the scanner and the hashMap
-			SC = new Scanner(new File(pathToExpression));
-			tree = new HashMap<>(2500000);
-			toResolve = new ConcurrentLinkedQueue<Integer>();
-			// If it is either an empty file or it starts with a double throw
-			// IllegalStateException.
-			if (SC.hasNextDouble() || !SC.hasNext()) {
-				SC.close();
-				throw new IllegalStateException("Sorry seems like the file is misconstructed");
-			} else
-				// If it seems ok, start populating the "Tree"
-				populateTree(0);
-			SC.close();
-
-			System.out.print("Just finished reading the file.\r\n");
+	ConcurrentCompute(String pathToExp) throws IOException {
+		startTime = System.currentTimeMillis();
+		// Try with resources, it's auto-closing.
+		try (BufferedReader br = new BufferedReader(new FileReader(pathToExp))) {
+			// Using this to buffer the file from hdd to ram.
+			String bf = null;
+			// After the loop, the global variable buffer should contain the
+			// whole file.
+			while ((bf = br.readLine()) != null)
+				buffer += bf;
+			// StringTokenizer is faster than Scanner.
+			st = new StringTokenizer(buffer);
+			System.out.print("String has: " + st.countTokens() + " tokens.\r\n");
+			long endOfInput = System.currentTimeMillis();
+			System.out.print("Reading the file took: " + (endOfInput - startTime) + " milliseconds.\r\n");
+			//It's faster to skip conditioning and just throw an Exception if this fails.
+			try {
+				String currentToken = st.nextToken();
+				//If the first token can be parsed into a double, the input string is misconstructed.
+				try {
+					Double.parseDouble(currentToken);
+					throw new InvalidObjectException(
+							"Sorry, but it seems like the first token of the file is a double and I can only process prefix notation.");
+				} catch (NumberFormatException e) {
+					root = new Tree(currentToken);
+				}
+			}
+			// If there is no initial token the file is empty.
+			catch (NoSuchElementException e) {
+				throw new NoSuchElementException("The file appears to be empty.");
+			}
+			long buildTime = System.currentTimeMillis();
+			System.out.print("Building took: " + (buildTime - endOfInput) + " milliseconds.\r\n");
 		} catch (FileNotFoundException e) {
-			System.err.print("Unable to locate the file containing the expression.\r\n");
-			System.exit(1);
+			throw new FileNotFoundException("Sorry, seems like the file is missing.");
+		} catch (IOException e) {
+			throw new IOException("Sorry, apparently the file is already in use by another application.");
 		}
 	}
 
-	private void populateTree(int currentIndex) {
-		boolean computable = false;
-		// I know it is a string
-		tree.put(currentIndex, SC.next());
-		// If the first operand is a double i put it in place
-		if (SC.hasNextDouble()) {
-			computable = true;
-			tree.put(2 * currentIndex + 1, SC.nextDouble());
+	public static void main(String[] args) throws IOException {
+		ConcurrentCompute cc = new ConcurrentCompute("expression.txt");
+
+	}
+
+	/**
+	 * Used to build the tree out of a lot of little and modular subTrees,
+	 * 
+	 * @author Vladyslav Sulimovskyy
+	 *
+	 */
+	public class Tree {
+		private double leftOperand, rightOperand, result;
+		// If null, this is the root node.
+		private Tree father = null;
+		private String operation = null;
+
+		// A sub tree is both the right and the left operands are realNumbers
+		// and not dummies.
+		public boolean computable() {
+			return leftOperand != 0.0d && rightOperand != 0.0d;
 		}
-		// Or if it's a string, i can build a sub tree to mark that expression.
-		else if (SC.hasNext())
-			populateTree(2 * currentIndex + 1);
-		// If there is no operand, the file is misconstructed.
-		else
-			throw new IllegalStateException("Sorry seems like the file is misconstructed");
-		// Same for the second operand
-		if (SC.hasNextDouble()) {
-			if (computable)
-				toResolve.add(2 * currentIndex + 2);
-			tree.put(2 * currentIndex + 2, SC.nextDouble());
-		} else if (SC.hasNext())
-			populateTree(2 * currentIndex + 2);
-		else
-			throw new IllegalStateException("Sorry seems like the file is misconstructed");
-	}
 
-	public void resolve(int threadNumber) throws InterruptedException {
-		Thread fff = new computingThread();
-		fff.start();
-		fff.join();
-		System.out.print("Result: " + tree.get(0) + "\r\n");
-
-	}
-
-	public static void main(String[] args) throws InterruptedException {
-
-		long start = System.currentTimeMillis();
-		ConcurrentCompute cc = new ConcurrentCompute(
-				"C:/Users/Bibaroc/Desktop/Workspace/DataFlowMachine/expression.txt");
-		cc.resolve(0);
-		System.out.print("Completed after: " + (System.currentTimeMillis() - start));
-
-	}
-
-	private class computingThread extends Thread {
-
-		public void run() {
-
-			while (!toResolve.isEmpty()) {
-
-				int sonToCompute = toResolve.poll();
-				computeThatRecursively(sonToCompute);
-				sonToCompute = -1;
+		// Constructs the root subTree
+		Tree(String operation) {
+			this.operation = operation;
+			String ss = null;
+			try {
+				ss = st.nextToken();
+				leftOperand = Double.parseDouble(ss);
+			} catch (NumberFormatException e1) {
+				leftOperand = (new Tree(this, ss)).result;
+			} catch (NoSuchElementException e0) {
+				throw new IllegalStateException("Semms like the file is misconstructed.");
 			}
-
-		}
-
-		private void computeThatRecursively(int sonToCompute) {
-			int theOtherOne = ((sonToCompute & 1) == 0) ? sonToCompute - 1 : sonToCompute + 1;
-			Object op0 = null;
-			Object op1 = null;
-			if ((op0 = tree.get(theOtherOne)) instanceof Double && (op1 = tree.get(sonToCompute)) instanceof Double) {
-				int fatherIndex = Math.floorDiv(sonToCompute - 1, 2);
-				String father = (String) tree.get(fatherIndex);
-				Double result;
-				if (father.equals("+"))
-					result = (double) op0 + (double) op1;
-				else if (father.equals("-"))
-					result = (double) op0 - (double) op1;
-				else if (father.equals("*"))
-					result = (double) op0 * (double) op1;
-				else if (father.equals("/"))
-					result = (double) op0 / (double) op1;
-				else
-					throw new IllegalStateException("Sorry seems like the file is misconstructed");
-				tree.put(fatherIndex, result);
-				computeThatRecursively(fatherIndex);
+			try {
+				ss = st.nextToken();
+				rightOperand = Double.parseDouble(ss);
+			} catch (NumberFormatException e1) {
+				rightOperand = (new Tree(this, ss)).result;
+			} catch (NoSuchElementException e0) {
+				throw new IllegalStateException("Semms like the file is misconstructed.");
 			}
-
 		}
 
+		/**
+		 * Constructs a subTree given father and operation to perform.
+		 * 
+		 * @param father
+		 *            The subTree father of this one.
+		 * @param operation
+		 *            The operation to perform.
+		 */
+		Tree(Tree father, String operation) {
+			this.father = father;
+			this.operation = operation;
+			String ss = null;
+
+			try {
+				ss = st.nextToken();
+				leftOperand = Double.parseDouble(ss);
+			} catch (NumberFormatException e1) {
+				leftOperand = (new Tree(this, ss)).result;
+			} catch (NoSuchElementException e0) {
+				throw new IllegalStateException("Semms like the file is misconstructed.");
+			}
+			try {
+				ss = st.nextToken();
+				rightOperand = Double.parseDouble(ss);
+			} catch (NumberFormatException e1) {
+				rightOperand = (new Tree(this, ss)).result;
+			} catch (NoSuchElementException e0) {
+				throw new IllegalStateException("Semms like the file is misconstructed.");
+			}
+		}
 	}
 }
