@@ -14,6 +14,7 @@ public class ConcurrentCompute {
 	private static StringTokenizer st = null;
 	private static LinkedList<Tree> ll = null;
 	private static Tree root;
+	private static boolean finished = false;
 
 	ConcurrentCompute(String pathToExp) throws IOException, InterruptedException {
 		long startTime = System.currentTimeMillis();
@@ -40,7 +41,8 @@ public class ConcurrentCompute {
 			// go.
 			catch (NumberFormatException e) {
 				ll = new LinkedList<Tree>();
-				root = new Tree(null, bf);
+				spawnWorkers();
+				buildTree(bf);
 			}
 			// If there is no initial token the file is empty.
 			catch (NoSuchElementException e) {
@@ -51,11 +53,27 @@ public class ConcurrentCompute {
 			main.start();
 			main.join();
 			long buildTime = System.currentTimeMillis();
-			System.out.print("Building took: " + (buildTime - startTime) + " milliseconds.\r\n");
+			System.out.print("Result is:" + root.result + "\r\nBuilding took: " + (buildTime - startTime)
+					+ " milliseconds.\r\n");
 		} catch (FileNotFoundException e) {
 			throw new FileNotFoundException("Sorry, seems like the file is missing.");
 		} catch (IOException e) {
 			throw new IOException("Sorry, apparently the file is already in use by another application.");
+		}
+	}
+
+	private void buildTree(String bf) {
+		root = new Tree(null, bf);
+		finished = true;
+	}
+
+	private void spawnWorkers() {
+		int numbCores = Runtime.getRuntime().availableProcessors();
+System.out.println("Spawning: "+numbCores+" threads.");
+		for (int i = 0; i < numbCores; i++)
+			(new Resolver()).start();
+		synchronized (ll) {
+			ll.notifyAll();
 		}
 	}
 
@@ -82,11 +100,14 @@ public class ConcurrentCompute {
 
 		private void checkForSolvables() throws InterruptedException {
 			synchronized (ll) {
-				if (ll.isEmpty())
-					// wait();
-					System.out.println("Result: " + root.result);
-				else
-					operate(ll.removeLast());
+				while (ll.isEmpty())
+					if (finished) {
+						System.out.println("Ho finito il risultato e': " + root.result);
+						return;
+					} else
+						ll.wait(100);
+				operate(ll.removeLast());
+				checkForSolvables();
 			}
 		}
 
@@ -105,38 +126,36 @@ public class ConcurrentCompute {
 			case "/":
 				removeLast.result = removeLast.leftSon.result / removeLast.rightSon.result;
 				break;
+			default:
+				throw new IllegalArgumentException(op + " is not a valid operation sign.");
 			}
-			// System.out.println(removeLast.result + " = " +
-			// removeLast.leftSon.result + " " + removeLast.operation + " "
-			// + removeLast.rightSon.result);
-			if (removeLast.father != null && removeLast.father.computable()) {
-				ll.add(removeLast.father);
-				checkForSolvables();
-			} else
-				checkForSolvables();
-
+			if (removeLast.father != null && removeLast.father.computable())
+				operate(removeLast.father);
 		}
 	}
 
 	public class Tree {
-		private Tree father;
-		private Tree rightSon, leftSon;
-		private String operation;
+		private Tree father, rightSon, leftSon = null;
+		private String operation = "";
 		private double result;
 
 		public boolean computable() {
-			return rightSon.result != 0.0d && leftSon.result != 0.0d;
+			if (leftSon != null && rightSon != null)
+				return rightSon.result != Double.NaN && leftSon.result != Double.NaN;
+			else
+				return false;
 
 		}
 
 		Tree(Tree father, String oper) {
-			boolean comp = false;
 			this.father = father;
 			operation = oper;
+			result = Double.NaN;
 			String ss = null;
+			boolean comp = false;
 			try {
 				ss = st.nextToken();
-				leftSon = new Tree(Double.parseDouble(ss));
+				leftSon = new Tree(this, Double.parseDouble(ss));
 				comp = true;
 			} catch (NumberFormatException e0) {
 				leftSon = new Tree(this, ss);
@@ -145,7 +164,7 @@ public class ConcurrentCompute {
 			}
 			try {
 				ss = st.nextToken();
-				rightSon = new Tree(Double.parseDouble(ss));
+				rightSon = new Tree(this, Double.parseDouble(ss));
 				synchronized (ll) {
 					if (comp) {
 						ll.add(this);
@@ -159,7 +178,8 @@ public class ConcurrentCompute {
 			}
 		}
 
-		Tree(double value) {
+		Tree(Tree father, double value) {
+			this.father = father;
 			this.result = value;
 		}
 	}
