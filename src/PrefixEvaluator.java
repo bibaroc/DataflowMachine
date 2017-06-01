@@ -32,7 +32,6 @@ public class PrefixEvaluator {
 				stack.push(stack.poll() / stack.poll());
 			else if (s.equals("-"))
 				stack.push(stack.poll() - stack.poll());
-
 			else
 				stack.push(Double.parseDouble(s));
 

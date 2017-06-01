@@ -4,7 +4,7 @@ import java.io.*;
 public class FP {
   private Random r;
   private FileWriter out;
-  private final int DEPTH = 20;
+  private final int DEPTH = 8;
   public static void main(String [] args) { new FP(); }
   FP() {
      r = new Random();
