@@ -4,7 +4,7 @@ import java.io.*;
 public class FP {
   private Random r;
   private FileWriter out;
-  private final int DEPTH = 8;
+  private final int DEPTH = 20;
   public static void main(String [] args) { new FP(); }
   FP() {
      r = new Random();
@@ -18,7 +18,7 @@ public class FP {
   }
   private String go(int n) {
      if (n > 0) {
-       switch(r.nextInt(3)) {
+       switch(r.nextInt(4)) {
            case 0: return "+ "+go(n-1)+" "+go(n-1); 
            case 1: return "- "+go(n-1)+" "+go(n-1); 
            case 2: return "* "+go(n-1)+" "+go(n-1); 

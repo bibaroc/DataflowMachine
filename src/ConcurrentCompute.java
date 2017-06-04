@@ -1,6 +1,7 @@
 
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Concurrently computes a huge-ass polish notation expression. This class is up
@@ -14,7 +15,7 @@ public class ConcurrentCompute {
 	private String buffer = "";
 	private StringTokenizer stringTokenz = null;
 	private LinkedList<Tree> treesToProcess = null;
-	private ArrayList<Resolver> workers;
+	private ConcurrentLinkedQueue<Resolver> workers;
 	private Tree rootTree;
 	private boolean finishedBuildingTree = false;
 	private long startTime;
@@ -43,9 +44,12 @@ public class ConcurrentCompute {
 			// go.
 			catch (NumberFormatException e) {
 				treesToProcess = new LinkedList<Tree>();
-				workers = new ArrayList<Resolver>();
+				workers = new ConcurrentLinkedQueue<Resolver>();
 				spawnWorkers();
 				buildTree(bf);
+				// for (Tree in : treesToProcess)
+				// solve(in);
+				// spawnWorkers();
 				waitForWorkers();
 			}
 			// If there is no initial token the file is empty and nextToken()
@@ -65,7 +69,8 @@ public class ConcurrentCompute {
 			for (Resolver in : workers)
 				in.join();
 			long endTime = System.currentTimeMillis();
-			System.out.println("Result was: " + rootTree.result);
+			System.out.println("Result was: " + rootTree.result + " ~ " + rootTree.leftSon.result + " ~ "
+					+ rootTree.rightSon.result);
 			System.out.println("It took me: " + (endTime - startTime) + " milliseconds.");
 		} catch (InterruptedException e) {
 			e.printStackTrace();
@@ -102,6 +107,33 @@ public class ConcurrentCompute {
 			in.start();
 	}
 
+	private void solve(Tree subTree) {
+		switch (subTree.operation) {
+		case "+":
+			subTree.result = subTree.leftSon.result + subTree.rightSon.result;
+			break;
+		case "-":
+			subTree.result = subTree.leftSon.result - subTree.rightSon.result;
+			break;
+		case "*":
+			subTree.result = subTree.leftSon.result * subTree.rightSon.result;
+			break;
+		case "/":
+			subTree.result = subTree.leftSon.result / subTree.rightSon.result;
+			break;
+		default:
+			throw new IllegalArgumentException(subTree.operation + " is not a valid operation sign.");
+		}
+		synchronized (subTree.father) {
+			if (subTree.father != null && subTree.father.rightSon != null
+					&& !Double.isNaN(subTree.father.leftSon.result) && !Double.isNaN(subTree.father.rightSon.result))
+				solve(subTree.father);
+			else if (subTree.father == null)
+				System.out.println("Il risultato e': " + rootTree.result);
+		}
+
+	}
+
 	/**
 	 * Used to climb the tree bottom to top each time solving what possible.
 	 * 
@@ -113,32 +145,18 @@ public class ConcurrentCompute {
 		 * When spawned it checks for available subTrees to compute.
 		 */
 		public void run() {
-			try {
-				checkForSolvables();
-			} catch (InterruptedException e) {
-				System.err.println("You shall not interrupt me u dumb fuck.");
-				System.exit(420);
-				// Blaze it
-			}
-		}
-
-		/**
-		 * Checks for the items available to be solved, if none waits to be
-		 * notified or even closes itself if the tree is completely built.
-		 * 
-		 * @throws InterruptedException
-		 *             If you interrupt it. Don't.
-		 */
-		private synchronized void checkForSolvables() throws InterruptedException {
 			synchronized (treesToProcess) {
-				do {
-					treesToProcess.wait();
-					if (finishedBuildingTree)
-						return;
-				} while (treesToProcess.isEmpty());
-				// Not gonna fail, inside the synchronized block.
-				operate(treesToProcess.removeFirst());
-				checkForSolvables();
+				try {
+					while (treesToProcess.isEmpty())
+						if (finishedBuildingTree)
+							return;
+						else
+							treesToProcess.wait();
+					operate(treesToProcess.removeFirst());
+					run();
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
 			}
 		}
 
@@ -152,37 +170,25 @@ public class ConcurrentCompute {
 		 *             If you interrupt dis.
 		 */
 		private void operate(Tree subTree) throws InterruptedException {
-			synchronized (subTree) {
-				String op = subTree.operation;
-				// if(subTree.leftSon.result==Double.NaN||subTree.rightSon.result!=Double.NaN)
-				// System.out.println("error");
-				switch (op) {
-				case "+":
-					subTree.result = subTree.leftSon.result + subTree.rightSon.result;
-					System.out.println(subTree.result + " = " + subTree.leftSon.result + " " + subTree.operation + " "
-							+ subTree.rightSon.result);
-					break;
-				case "-":
-					subTree.result = subTree.leftSon.result - subTree.rightSon.result;
-					System.out.println(subTree.result + " = " + subTree.leftSon.result + " " + subTree.operation + " "
-							+ subTree.rightSon.result);
-					break;
-				case "*":
-					subTree.result = subTree.leftSon.result * subTree.rightSon.result;
-					System.out.println(subTree.result + " = " + subTree.leftSon.result + " " + subTree.operation + " "
-							+ subTree.rightSon.result);
-					break;
-				case "/":
-					subTree.result = subTree.leftSon.result / subTree.rightSon.result;
-					System.out.println(subTree.result + " = " + subTree.leftSon.result + " " + subTree.operation + " "
-							+ subTree.rightSon.result);
-					break;
-				default:
-					throw new IllegalArgumentException(op + " is not a valid operation sign.");
-				}
-				if (subTree.father != null && subTree.father.computable())
-					operate(subTree.father);
+
+			switch (subTree.operation) {
+			case "+":
+				subTree.result = subTree.leftSon.result + subTree.rightSon.result;
+				break;
+			case "-":
+				subTree.result = subTree.leftSon.result - subTree.rightSon.result;
+				break;
+			case "*":
+				subTree.result = subTree.leftSon.result * subTree.rightSon.result;
+				break;
+			case "/":
+				subTree.result = subTree.leftSon.result / subTree.rightSon.result;
+				break;
+			default:
+				throw new IllegalArgumentException(subTree.operation + " is not a valid operation sign.");
 			}
+			if (subTree.father != null && subTree.father.isComputable())
+				treesToProcess.addLast((subTree.father));
 
 		}
 	}
@@ -195,9 +201,10 @@ public class ConcurrentCompute {
 	 *
 	 */
 	public class Tree {
+
 		private Tree father, rightSon, leftSon = null;
 		private String operation = "";
-		private double result;
+		private double result = 0.0d;
 
 		/**
 		 * To be computable it must have both the sons and the values of both
@@ -205,21 +212,23 @@ public class ConcurrentCompute {
 		 * 
 		 * @return Is this is computable or not.
 		 */
-		public boolean computable() {
-			// Fuck you
-			return (rightSon != null ? leftSon.result != Double.NaN && rightSon.result != Double.NaN : false);
+		public boolean isComputable() {
+			return rightSon != null ? !Double.isNaN(leftSon.result) && !Double.isNaN(rightSon.result) : false;
 		}
 
 		Tree(Tree fatherSubTree, String operator) {
 			result = Double.NaN;
 			this.father = fatherSubTree;
 			operation = operator;
-			String ss = null;
+			String ss = "";
+			boolean comb = false;
 			try {
 				ss = stringTokenz.nextToken();
-				leftSon = new Tree(this, Double.parseDouble(ss));
+				leftSon = new Tree(Double.parseDouble(ss));
+				comb = true;
 			}
-			// If the element following the operation cannot be parsed into a
+			// If the element following the operation cannot be parsed into
+			// a
 			// double, it must be an operation.
 			catch (NumberFormatException e0) {
 				leftSon = new Tree(this, ss);
@@ -232,16 +241,15 @@ public class ConcurrentCompute {
 			// Same shit
 			try {
 				ss = stringTokenz.nextToken();
-				double res = Double.parseDouble(ss);
-				rightSon = new Tree(this, res);
-				// If the first element is a number and this also is, the tree
+				rightSon = new Tree(Double.parseDouble(ss));
+				// If the first element is a number and this also is, the
+				// tree
 				// is computable and is pushed into the list.
-				synchronized (treesToProcess) {
-					if (leftSon.result != Double.NaN) {
+				if (Double.isNaN(leftSon.result))
+					synchronized (treesToProcess) {
 						treesToProcess.addLast(this);
 						treesToProcess.notify();
 					}
-				}
 			} catch (NumberFormatException e0) {
 				rightSon = new Tree(this, ss);
 			} catch (NoSuchElementException e1) {
@@ -250,9 +258,8 @@ public class ConcurrentCompute {
 			}
 		}
 
-		Tree(Tree fatherSubTree, double value) {
+		Tree(double value) {
 			result = value;
-			father = fatherSubTree;
 		}
 	}
 
