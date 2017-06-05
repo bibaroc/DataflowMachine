@@ -11,20 +11,20 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  *
  */
 public class ConcurrentCompute {
-
-	private String buffer = "";
-	private StringTokenizer stringTokenz = null;
-	private LinkedList<Tree> treesToProcess = null;
-	private ConcurrentLinkedQueue<Resolver> workers;
 	private Tree rootTree;
-	private boolean finishedBuildingTree = false;
 	private long startTime;
+	private StringTokenizer stringTokenz = null;
+	private LinkedList<Resolver> workers = null;
+	private boolean finishedBuildingTree = false;
+	private LinkedList<Tree> treesToProcess = null;
 
 	ConcurrentCompute(String pathToExp) throws IOException, InterruptedException {
+		Thread.currentThread().setPriority(1);
 		startTime = System.currentTimeMillis();
 		// Try with resources, it's auto-closing.
 		try (BufferedReader br = new BufferedReader(new FileReader(pathToExp))) {
 			// Using this to buffer the file from hdd to ram.
+			String buffer = "";
 			String bf;
 			// After the loop, the global variable buffer should contain the
 			// whole file.
@@ -40,43 +40,29 @@ public class ConcurrentCompute {
 				// string is misconstructed.
 				Double.parseDouble(bf);
 			}
-			// If i cannot parse a double from the first element, it's good to
-			// go.
-			catch (NumberFormatException e) {
+			// If i cannot parse a double from the first element it could be ok.
+			catch (NumberFormatException e0) {
 				treesToProcess = new LinkedList<Tree>();
-				workers = new ConcurrentLinkedQueue<Resolver>();
-				spawnWorkers();
+				workers = new LinkedList<Resolver>();
 				buildTree(bf);
 				// for (Tree in : treesToProcess)
 				// solve(in);
-				// spawnWorkers();
+				spawnWorkers();
 				waitForWorkers();
 			}
 			// If there is no initial token the file is empty and nextToken()
 			// fails.
-			catch (NoSuchElementException e) {
+			catch (NoSuchElementException e1) {
 				throw new NoSuchElementException("The file appears to be empty.");
 			}
-		} catch (FileNotFoundException e) {
+		} catch (FileNotFoundException e0) {
 			throw new FileNotFoundException("Sorry, seems like the file is missing.");
-		} catch (IOException e) {
+		} catch (IOException e1) {
 			throw new IOException("Sorry, apparently the file is already in use by another application.");
 		}
 	}
 
-	private void waitForWorkers() {
-		try {
-			for (Resolver in : workers)
-				in.join();
-			long endTime = System.currentTimeMillis();
-			System.out.println("Result was: " + rootTree.result + " ~ " + rootTree.leftSon.result + " ~ "
-					+ rootTree.rightSon.result);
-			System.out.println("It took me: " + (endTime - startTime) + " milliseconds.");
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-	}
-
+	
 	/**
 	 * Builds the tree using the given String as root.
 	 * 
@@ -99,14 +85,36 @@ public class ConcurrentCompute {
 	 * of workers equals the number of available logical cores.
 	 */
 	private void spawnWorkers() {
-		int numbCores = 1;
+		int numbCores = Runtime.getRuntime().availableProcessors();
 		System.out.println("Spawning: " + numbCores + " threads.");
 		for (int i = numbCores; i > 0; i--)
 			workers.add(new Resolver());
 		for (Resolver in : workers)
 			in.start();
 	}
+	
+	/**
+	 * Just waits for workers and eventualy when everyone has finished pulls the
+	 * result.
+	 */
+	private void waitForWorkers() {
+		try {
+			for (Resolver in : workers)
+				in.join();
+			long endTime = System.currentTimeMillis();
+			System.out.println("Result was: " + rootTree.result);
+			System.out.println("It took me: " + (endTime - startTime) + " milliseconds.");
+		} catch (InterruptedException e0) {
+			System.err.println("Dont interrupt me you sick nerd.");
+			System.exit(123);
+		}
+	}
 
+	/**
+	 * Used to check for correctness.
+	 * 
+	 * @param subTree
+	 */
 	private void solve(Tree subTree) {
 		switch (subTree.operation) {
 		case "+":
@@ -124,14 +132,10 @@ public class ConcurrentCompute {
 		default:
 			throw new IllegalArgumentException(subTree.operation + " is not a valid operation sign.");
 		}
-		synchronized (subTree.father) {
-			if (subTree.father != null && subTree.father.rightSon != null
-					&& !Double.isNaN(subTree.father.leftSon.result) && !Double.isNaN(subTree.father.rightSon.result))
-				solve(subTree.father);
-			else if (subTree.father == null)
-				System.out.println("Il risultato e': " + rootTree.result);
-		}
-
+		if (subTree.father != null && subTree.father.isComputable())
+			solve(subTree.father);
+		else if (subTree.father == null)
+			System.out.println("Il risultato e': " + rootTree.result);
 	}
 
 	/**
@@ -169,8 +173,7 @@ public class ConcurrentCompute {
 		 * @throws InterruptedException
 		 *             If you interrupt dis.
 		 */
-		private void operate(Tree subTree) throws InterruptedException {
-
+		private synchronized void operate(Tree subTree) throws InterruptedException {
 			switch (subTree.operation) {
 			case "+":
 				subTree.result = subTree.leftSon.result + subTree.rightSon.result;
@@ -188,8 +191,7 @@ public class ConcurrentCompute {
 				throw new IllegalArgumentException(subTree.operation + " is not a valid operation sign.");
 			}
 			if (subTree.father != null && subTree.father.isComputable())
-				treesToProcess.addLast((subTree.father));
-
+				operate(subTree.father);
 		}
 	}
 
@@ -221,15 +223,12 @@ public class ConcurrentCompute {
 			this.father = fatherSubTree;
 			operation = operator;
 			String ss = "";
-			boolean comb = false;
 			try {
 				ss = stringTokenz.nextToken();
 				leftSon = new Tree(Double.parseDouble(ss));
-				comb = true;
 			}
 			// If the element following the operation cannot be parsed into
-			// a
-			// double, it must be an operation.
+			// a double, it must be an operation.
 			catch (NumberFormatException e0) {
 				leftSon = new Tree(this, ss);
 			}
@@ -245,10 +244,10 @@ public class ConcurrentCompute {
 				// If the first element is a number and this also is, the
 				// tree
 				// is computable and is pushed into the list.
-				if (Double.isNaN(leftSon.result))
+				if (!Double.isNaN(leftSon.result))
 					synchronized (treesToProcess) {
-						treesToProcess.addLast(this);
-						treesToProcess.notify();
+						treesToProcess.addFirst(this);
+						treesToProcess.notifyAll();
 					}
 			} catch (NumberFormatException e0) {
 				rightSon = new Tree(this, ss);
